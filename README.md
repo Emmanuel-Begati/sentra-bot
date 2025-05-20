@@ -1,136 +1,121 @@
-# Crop Disease Dataset Scraper
+# Plant Disease Recognition System
 
-A comprehensive Python script for scraping, cleaning, and organizing crop images to train machine learning models for pest and disease detection.
+![Plant Disease Recognition](home_page.jpeg)
+
+## Project Overview
+
+The Plant Disease Recognition System is a comprehensive solution for identifying diseases in various crops using machine learning and computer vision techniques. This system enables farmers and agricultural specialists to quickly diagnose plant diseases by simply uploading an image, potentially saving crops and increasing agricultural productivity.
 
 ## Features
 
-- Scrapes crop images from Google and Bing image search engines
-- Organizes images into a structured dataset for 15 different crops
-- Categorizes images by healthy plants, diseases, and pests
-- Cleans images by removing duplicates, blurry images, and low-resolution images
-- Splits the dataset into training and testing sets
-- Parallelized processing for faster execution
-- Detailed logging and statistics
+- **Image-based Disease Detection**: Upload images of plant leaves to detect diseases
+- **Multi-crop Support**: Identifies diseases across various crops including apple, corn, grape, potato, tomato, and many others
+- **User-friendly Interface**: Intuitive Streamlit web application for easy interaction
+- **High Accuracy Model**: Utilizes state-of-the-art deep learning models (ResNet50) for accurate disease classification
+- **Detailed Analysis**: Provides classification results for 38+ different crop-disease combinations
 
-## Dataset Structure
+## Dataset
 
-```
-dataset/
-  ├── Groundnut/
-  │    ├── healthy/
-  │    ├── early_leaf_spot/
-  │    ├── aphids/
-  │    └── ...
-  ├── Cassava/
-  │    ├── healthy/
-  │    ├── mosaic_virus/
-  │    ├── mealybug/
-  │    └── ...
-  └── ...
-```
+The project uses a comprehensive dataset of crop diseases consisting of approximately 87,000 RGB images of healthy and diseased crop leaves categorized into 38+ different classes. The dataset includes:
 
-After splitting:
+- Training set: ~70,000 images
+- Validation set: ~17,500 images 
+- Test set: 33 images for final evaluation
+
+## Project Structure
 
 ```
-dataset_split/
-  ├── train/
-  │    ├── Groundnut/
-  │    │    ├── healthy/
-  │    │    ├── early_leaf_spot/
-  │    │    └── ...
-  │    └── ...
-  └── test/
-       ├── Groundnut/
-       │    ├── healthy/
-       │    ├── early_leaf_spot/
-       │    └── ...
-       └── ...
+sentra-bot/
+├── main.py                           # Streamlit web application
+├── trainer_notebook.py               # Model training pipeline
+├── crop_disease_dataset_scraper.py   # Data collection utility
+├── requirements.txt                  # Project dependencies
+├── dataset/                          # Dataset directory with categorized images
+├── models/                           # Saved model files
+└── results/                          # Evaluation metrics and visualizations
 ```
 
-## Included Crops
+## Technologies Used
 
-1. Groundnut (Peanut)
-2. Tobacco
-3. Sorghum
-4. Millet
-5. Cocoa
-6. Cassava
-7. Scotch bonnet (hot pepper)
-8. Bananas / Plantain
-9. Leafy greens (spinach)
-10. Beans
-11. Cowpea (black-eyed peas)
-12. Wheat
-13. Rice
-14. Onion
-15. Garlic
+- **Python**: Primary programming language
+- **PyTorch**: Deep learning framework for model training and evaluation
+- **TensorFlow/Keras**: For model deployment
+- **Streamlit**: Web application framework
+- **OpenCV & PIL**: Image processing
+- **scikit-learn**: Evaluation metrics
+- **Matplotlib & Seaborn**: Data visualization
 
-## Installation
+## Getting Started
 
-1. Clone this repository:
+### Prerequisites
+
+- Python 3.8+
+- Required packages (install using `pip install -r requirements.txt`)
+
+### Installation
+
+1. Clone this repository
    ```bash
-   git clone https://github.com/yourusername/crop-disease-dataset-scraper.git
-   cd crop-disease-dataset-scraper
+   git clone https://github.com/yourusername/sentra-bot.git
+   cd sentra-bot
    ```
 
-2. Install requirements:
+2. Install dependencies
    ```bash
    pip install -r requirements.txt
    ```
 
-## Usage
+3. Run the web application
+   ```bash
+   streamlit run main.py
+   ```
 
-### Basic Usage
+### Using the Application
 
-Run the script with default settings:
+1. Open the web application in your browser (typically at http://localhost:8501)
+2. Navigate to the "Disease Recognition" page
+3. Upload an image of a plant leaf
+4. Click "Predict" to get the disease classification result
+
+## Model Training
+
+The model training pipeline in `trainer_notebook.py` includes:
+
+- Data loading and preprocessing
+- Data augmentation techniques
+- Model architecture selection (ResNet50, ResNet18, or custom CNN)
+- Transfer learning implementation
+- Training with early stopping
+- Model evaluation with detailed metrics
+- Result visualization and model saving
+
+To train a new model:
 
 ```bash
-python crop_disease_dataset_scraper.py
+python trainer_notebook.py
 ```
 
-This will scrape all crops with a maximum of 2000 images per category.
+## Performance
 
-### Advanced Usage
+The system achieves high accuracy in disease classification, with comprehensive evaluation metrics including:
+- Confusion matrix visualization
+- Classification reports
+- Accuracy measurements
+- Sample predictions
 
-Customize the script execution with command-line arguments:
+## Future Improvements
 
-```bash
-python crop_disease_dataset_scraper.py --crops=Wheat,Rice --max-images=500 --workers=8
-```
-
-### Available Options
-
-- `--crops`: Comma-separated list of crops to scrape (default: all)
-- `--max-images`: Maximum number of images per category (default: 2000)
-- `--skip-scraping`: Skip the image scraping step
-- `--skip-cleaning`: Skip the image cleaning step
-- `--skip-splitting`: Skip the train/test splitting step
-- `--output-dir`: Output directory for the dataset (default: ./dataset)
-- `--split-dir`: Output directory for the train/test split (default: ./dataset_split)
-- `--workers`: Number of worker threads for parallel processing (default: 4)
-
-## Example
-
-1. Scrape only Cassava and Rice crops with 1000 images per category:
-   ```bash
-   python crop_disease_dataset_scraper.py --crops=Cassava,Rice --max-images=1000
-   ```
-
-2. Clean and split an existing dataset (skip scraping):
-   ```bash
-   python crop_disease_dataset_scraper.py --skip-scraping
-   ```
-
-3. Resume a previously interrupted scraping session:
-   ```bash
-   python crop_disease_dataset_scraper.py
-   ```
-   (The script will automatically skip existing images)
+- Mobile application deployment
+- Real-time disease detection using camera feed
+- Additional crop disease categories
+- Treatment recommendations based on detected diseases
+- Integration with agricultural management systems
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+[MIT License](LICENSE)
 
-## Disclaimer
+## Acknowledgments
 
-Please use this tool responsibly and respect the terms of service of search engines. Excessive scraping may result in your IP being temporarily blocked.
+- Original plant disease dataset creators
+- Contributors to open-source libraries used in this project
