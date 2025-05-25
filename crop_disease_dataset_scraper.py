@@ -135,7 +135,7 @@ logger = logging.getLogger(__name__)
 
 # Configuration constants
 CONFIG = {
-    "MIN_IMAGES_PER_CATEGORY": 500,  # Target minimum number of images per category
+    "MIN_IMAGES_PER_CATEGORY": 500,  # Target minimum number of images per category - Updated to 500
     "MAX_RETRIES": 5,  # Maximum number of retries for network operations
     "PROXY_ROTATION_FREQUENCY": 10,  # How often to rotate proxies (in requests)
     "USER_AGENT_ROTATION_FREQUENCY": 5,  # How often to rotate user agents
@@ -1672,6 +1672,7 @@ def clean_images(
         "blurry": 0,
         "low_quality": 0,
         "duplicate": 0,
+        "non_plant_content": 0,
         "other": 0,
     }
 
@@ -1732,6 +1733,15 @@ def clean_images(
                 removal_reasons["blurry"] += 1
                 continue
 
+            # Check for plant content (filter out non-plant images)
+            if not detect_plant_content(image_path):
+                with open(log_file, "a") as log:
+                    log.write(f"Removed non-plant image: {filename}\n")
+                os.remove(image_path)
+                removed_count += 1
+                removal_reasons["non_plant_content"] += 1
+                continue
+
             # Check for comprehensive quality issues
             if is_low_quality(image_path, quality_threshold):
                 with open(log_file, "a") as log:
@@ -1760,7 +1770,7 @@ def clean_images(
                 {
                     "filename": filename,
                     "path": image_path,
-                    "quality_score": calculate_quality_score(metrics),
+                    "quality_score": calculate_quality_score(metrics, image_path),
                     "metrics": metrics,
                 }
             )
@@ -1818,7 +1828,7 @@ def clean_images(
     return before_count, after_count
 
 
-def calculate_quality_score(metrics: Dict[str, Any]) -> float:
+def calculate_quality_score(metrics: Dict[str, Any], image_path: str = None) -> float:
     """Calculate a quality score from image metrics.
 
     Higher score = better quality.
@@ -1845,6 +1855,19 @@ def calculate_quality_score(metrics: Dict[str, Any]) -> float:
     )
     aspect_score = max(0, 10 - (aspect - 1) * 5)
     score += aspect_score
+
+    # Plant content quality bonus (0-20 points)
+    # Bonus for images that have good agricultural content
+    if image_path:
+        try:
+            plant_score = detect_plant_content(image_path, return_confidence=True)
+            agricultural_score = detect_agricultural_content(image_path, return_confidence=True)
+            # Combine plant and agricultural scores with weights
+            plant_bonus = (plant_score * 0.7 + agricultural_score * 0.3) * 20
+            score += plant_bonus
+        except Exception:
+            # If plant detection fails, don't penalize
+            pass
 
     # Saturation factor (0-10 points)
     # Moderate saturation is best
@@ -2761,10 +2784,243 @@ def run_scraper(args: argparse.Namespace):
     )
 
 
-if __name__ == "__main__":
-    args = parse_arguments()
+# Plant detection functions for enhanced image filtering
+def detect_plant_content(image_path: str, return_confidence: bool = False) -> Union[bool, float]:
+    """
+    Detect if an image contains plant/vegetation content using computer vision.
+    
+    Args:
+        image_path: Path to the image file
+        return_confidence: If True, return confidence score (0-1), else boolean
+    
+    Returns:
+        bool or float: Plant detection result or confidence score
+    """
     try:
-        run_scraper(args)
+        # Read image
+        img = cv2.imread(image_path)
+        if img is None:
+            return 0.0 if return_confidence else False
+            
+        # Convert to different color spaces
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+        
+        confidence_score = 0.0
+        
+        # 1. Green vegetation detection in HSV
+        # Define green color ranges for vegetation
+        lower_green1 = np.array([35, 40, 40])
+        upper_green1 = np.array([85, 255, 255])
+        
+        # Secondary green range for yellower greens
+        lower_green2 = np.array([25, 40, 40]) 
+        upper_green2 = np.array([35, 255, 255])
+        
+        mask_green1 = cv2.inRange(hsv, lower_green1, upper_green1)
+        mask_green2 = cv2.inRange(hsv, lower_green2, upper_green2)
+        green_mask = cv2.bitwise_or(mask_green1, mask_green2)
+        
+        green_ratio = np.sum(green_mask > 0) / (img.shape[0] * img.shape[1])
+        confidence_score += min(0.4, green_ratio * 2)  # Up to 40% of score from green content
+        
+        # 2. Texture complexity analysis
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        
+        # Calculate texture complexity using local binary patterns concept
+        # High frequency content indicates natural textures
+        sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
+        sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
+        gradient_magnitude = np.sqrt(sobelx**2 + sobely**2)
+        
+        # Normalize and get texture score
+        texture_score = np.mean(gradient_magnitude) / 255.0
+        confidence_score += min(0.2, texture_score * 0.5)  # Up to 20% from texture
+        
+        # 3. Edge density analysis
+        edges = cv2.Canny(gray, 50, 150)
+        edge_density = np.sum(edges > 0) / (img.shape[0] * img.shape[1])
+        confidence_score += min(0.15, edge_density * 3)  # Up to 15% from edges
+        
+        # 4. Color variance (natural images have more color diversity)
+        color_std = np.std(img.reshape(-1, 3), axis=0)
+        avg_color_variance = np.mean(color_std) / 255.0
+        confidence_score += min(0.1, avg_color_variance)  # Up to 10% from color variance
+        
+        # 5. Frequency domain analysis for natural textures
+        # Natural plant textures have specific frequency characteristics
+        f_transform = np.fft.fft2(gray)
+        f_shift = np.fft.fftshift(f_transform)
+        magnitude_spectrum = np.log(np.abs(f_shift) + 1)
+        
+        # Calculate energy distribution
+        h, w = magnitude_spectrum.shape
+        center_h, center_w = h // 2, w // 2
+        
+        # Energy in mid-frequencies (natural textures)
+        mid_freq_mask = np.zeros_like(magnitude_spectrum)
+        cv2.circle(mid_freq_mask, (center_w, center_h), min(h, w) // 4, 1, -1)
+        cv2.circle(mid_freq_mask, (center_w, center_h), min(h, w) // 8, 0, -1)
+        
+        mid_freq_energy = np.sum(magnitude_spectrum * mid_freq_mask)
+        total_energy = np.sum(magnitude_spectrum)
+        
+        if total_energy > 0:
+            mid_freq_ratio = mid_freq_energy / total_energy
+            confidence_score += min(0.15, mid_freq_ratio * 0.5)  # Up to 15% from frequency analysis
+        
+        # Normalize confidence score to 0-1 range
+        confidence_score = min(1.0, confidence_score)
+        
+        if return_confidence:
+            return confidence_score
+        else:
+            # Threshold for binary decision
+            return confidence_score > 0.3
+            
     except Exception as e:
-        logger.exception(f"Error running scraper: {e}")
-        sys.exit(1)
+        logger.debug(f"Error in plant detection for {image_path}: {e}")
+        return 0.0 if return_confidence else False
+
+
+def detect_agricultural_content(image_path: str, return_confidence: bool = False) -> Union[bool, float]:
+    """
+    Detect agricultural/crop-specific content patterns.
+    
+    Args:
+        image_path: Path to the image file
+        return_confidence: If True, return confidence score (0-1), else boolean
+    
+    Returns:
+        bool or float: Agricultural content detection result or confidence score
+    """
+    try:
+        img = cv2.imread(image_path)
+        if img is None:
+            return 0.0 if return_confidence else False
+            
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        
+        confidence_score = 0.0
+        
+        # 1. Leaf-like pattern detection using template matching concepts
+        # Create simple leaf-like kernels for convolution
+        kernel_size = 15
+        
+        # Elongated kernel for leaf shapes
+        leaf_kernel = np.zeros((kernel_size, kernel_size))
+        cv2.ellipse(leaf_kernel, (kernel_size//2, kernel_size//2), 
+                   (kernel_size//3, kernel_size//6), 45, 0, 360, 1, -1)
+        
+        # Apply morphological operations to detect leaf-like structures
+        response = cv2.filter2D(gray.astype(np.float32), -1, leaf_kernel)
+        leaf_response = np.sum(response > np.percentile(response, 85)) / response.size
+        confidence_score += min(0.3, leaf_response * 2)
+        
+        # 2. Row/field structure detection
+        # Many crop images show organized planting patterns
+        
+        # Horizontal line detection (crop rows)
+        horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (25, 1))
+        horizontal_lines = cv2.morphologyEx(gray, cv2.MORPH_OPEN, horizontal_kernel)
+        horizontal_score = np.sum(horizontal_lines > 50) / horizontal_lines.size
+        confidence_score += min(0.2, horizontal_score * 10)
+        
+        # Vertical patterns (plant stems)
+        vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 25))
+        vertical_lines = cv2.morphologyEx(gray, cv2.MORPH_OPEN, vertical_kernel)
+        vertical_score = np.sum(vertical_lines > 50) / vertical_lines.size
+        confidence_score += min(0.15, vertical_score * 10)
+        
+        # 3. Brown/soil color detection (agricultural context)
+        # Define brown/soil color ranges
+        lower_brown = np.array([8, 50, 20])
+        upper_brown = np.array([25, 255, 200])
+        brown_mask = cv2.inRange(hsv, lower_brown, upper_brown)
+        brown_ratio = np.sum(brown_mask > 0) / brown_mask.size
+        confidence_score += min(0.2, brown_ratio * 1.5)
+        
+        # 4. Texture uniformity analysis
+        # Agricultural images often have more uniform texture patterns
+        # compared to wild vegetation
+        
+        # Calculate local standard deviation
+        kernel = np.ones((9, 9), np.float32) / 81
+        mean_filtered = cv2.filter2D(gray.astype(np.float32), -1, kernel)
+        sqr_diff = (gray.astype(np.float32) - mean_filtered) ** 2
+        local_variance = cv2.filter2D(sqr_diff, -1, kernel)
+        
+        # Agricultural images tend to have moderate, consistent variance
+        variance_uniformity = 1.0 - (np.std(local_variance) / (np.mean(local_variance) + 1e-6))
+        confidence_score += min(0.15, variance_uniformity * 0.3)
+        
+        # Normalize confidence score
+        confidence_score = min(1.0, confidence_score)
+        
+        if return_confidence:
+            return confidence_score
+        else:
+            return confidence_score > 0.25
+            
+    except Exception as e:
+        logger.debug(f"Error in agricultural content detection for {image_path}: {e}")
+        return 0.0 if return_confidence else False
+
+
+def filter_non_plant_images(image_directory: str, strict_mode: bool = False) -> Tuple[int, int]:
+    """
+    Filter out non-plant images from a directory.
+    
+    Args:
+        image_directory: Directory containing images to filter
+        strict_mode: If True, use stricter thresholds for plant detection
+    
+    Returns:
+        Tuple of (original_count, filtered_count)
+    """
+    if not os.path.exists(image_directory):
+        return 0, 0
+    
+    # Get all image files
+    image_files = [
+        f for f in os.listdir(image_directory)
+        if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.webp'))
+    ]
+    
+    original_count = len(image_files)
+    removed_count = 0
+    
+    plant_threshold = 0.4 if strict_mode else 0.3
+    agricultural_threshold = 0.3 if strict_mode else 0.25
+    
+    for filename in image_files:
+        image_path = os.path.join(image_directory, filename)
+        
+        try:
+            # Check if image contains plant content
+            plant_confidence = detect_plant_content(image_path, return_confidence=True)
+            agricultural_confidence = detect_agricultural_content(image_path, return_confidence=True)
+            
+            # Combined decision - image needs to pass either plant detection or agricultural detection
+            is_plant_related = (plant_confidence >= plant_threshold or 
+                              agricultural_confidence >= agricultural_threshold)
+            
+            if not is_plant_related:
+                # Remove non-plant image
+                os.remove(image_path)
+                removed_count += 1
+                logger.debug(f"Removed non-plant image: {filename} "
+                           f"(plant: {plant_confidence:.2f}, agri: {agricultural_confidence:.2f})")
+                
+        except Exception as e:
+            logger.debug(f"Error processing {filename}: {e}")
+            # If there's an error, keep the image (conservative approach)
+            continue
+    
+    filtered_count = original_count - removed_count
+    
+    logger.info(f"Plant filtering: {original_count} -> {filtered_count} images "
+                f"(removed {removed_count} non-plant images)")
+    
+    return original_count, filtered_count
