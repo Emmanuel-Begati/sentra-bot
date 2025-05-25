@@ -135,7 +135,7 @@ logger = logging.getLogger(__name__)
 
 # Configuration constants
 CONFIG = {
-    "MIN_IMAGES_PER_CATEGORY": 700,  # Target minimum number of images per category
+    "MIN_IMAGES_PER_CATEGORY": 500,  # Target minimum number of images per category
     "MAX_RETRIES": 5,  # Maximum number of retries for network operations
     "PROXY_ROTATION_FREQUENCY": 10,  # How often to rotate proxies (in requests)
     "USER_AGENT_ROTATION_FREQUENCY": 5,  # How often to rotate user agents
@@ -582,7 +582,7 @@ CROPS_DATA = {
         ],
     },
     "Millet": {
-        "pests": ["stem_borers", "shoot_flies", "grasshoppers"],
+        "pests": ["stem_borers", "shoot_flies"],
         "diseases": ["blast", "smut", "downy_mildew", "ergot"],
     },
     "Scotch_bonnet": {

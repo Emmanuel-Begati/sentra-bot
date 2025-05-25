@@ -1,1 +1,1 @@
-{"completed_categories": {"Scotch_bonnet": {"healthy": 146, "aphids": 145}}, "failed_queries": [], "current_crop": "Scotch_bonnet", "current_category": "pests", "current_condition": "whiteflies", "start_time": 1747746631.0041337, "images_scraped": 291, "total_target": 6300, "timestamp": 1747752467.0156393}
+{"completed_categories": {}, "failed_queries": [], "current_crop": "Tobacco", "current_category": "healthy", "current_condition": "healthy", "start_time": 1748201032.490594, "images_scraped": 0, "total_target": 30800, "timestamp": 1748201032.5311282}
