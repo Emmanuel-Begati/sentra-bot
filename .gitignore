@@ -1,5 +1,4 @@
-Plant_Disease_Dataset/
-trained_model.h5
-trained_model.keras
 venv/
 dataset/
+__pycache__/
+scraper/
